@@ -1,13 +1,8 @@
 # MeuCarro API — Data Model & API Contract
 
-> **Status**: draft, pending review. This is the first version of the domain
-> model and API contract — nothing existed before this document. It is the
-> source of truth that `PLAN.md` will be built on top of, so please review
-> and confirm (or adjust) before the implementation issues are generated.
->
-> Every open design decision I had to make up (since there was no prior
-> contract to follow) is called out explicitly in **Open decisions /
-> assumptions** at the end. Please resolve those before we proceed.
+> **Status**: approved. This is the source of truth `PLAN.md` is built on
+> top of. The decisions below (originally listed as open assumptions) were
+> reviewed and accepted as-is.
 
 ## 1. Entities
 
@@ -168,7 +163,7 @@ Read-only aggregate, consumed by the dashboard and (later) CarPlay.
 | `GET /vehicles` | authenticated | query: `page, page_size` | `200 Page<Vehicle>` | only current user's vehicles |
 | `GET /vehicles/{id}` | authenticated, owner | — | `200 Vehicle` · `404` | |
 | `PATCH /vehicles/{id}` | authenticated, owner | partial `Vehicle` fields | `200 Vehicle` · `400` · `404` | |
-| `DELETE /vehicles/{id}` | authenticated, owner | — | `204` · `404` | cascades to its Events, MaintenanceRules, Alerts (see open decisions) |
+| `DELETE /vehicles/{id}` | authenticated, owner | — | `204` · `404` | cascades to its Events, MaintenanceRules, Alerts (see Decisions) |
 
 ### events
 
@@ -178,8 +173,8 @@ Read-only aggregate, consumed by the dashboard and (later) CarPlay.
 | `POST /vehicles/{vehicle_id}/events/voice` | authenticated, owner of vehicle | `{raw_text}` | `201 Event` (with `source=voice`, `raw_text` stored) · `422` if the text can't be parsed with enough confidence · `404` vehicle not found | v1 parser is **regex/rule-based only**, no LLM (see Issue for this) |
 | `GET /vehicles/{vehicle_id}/events` | authenticated, owner of vehicle | query: `page, page_size, type?, from?, to?` | `200 Page<Event>` · `404` vehicle not found | sorted by `event_date` desc |
 | `GET /events/{id}` | authenticated, owner (via vehicle) | — | `200 Event` · `404` | |
-| `PATCH /events/{id}` | authenticated, owner (via vehicle) | partial `Event` fields | `200 Event` · `400` · `404` | does **not** re-run the alert-resolution side effect (see open decisions) |
-| `DELETE /events/{id}` | authenticated, owner (via vehicle) | — | `204` · `404` | does **not** reopen an Alert it had resolved (see open decisions) |
+| `PATCH /events/{id}` | authenticated, owner (via vehicle) | partial `Event` fields | `200 Event` · `400` · `404` | does **not** re-run the alert-resolution side effect (see Decisions) |
+| `DELETE /events/{id}` | authenticated, owner (via vehicle) | — | `204` · `404` | does **not** reopen an Alert it had resolved (see Decisions) |
 
 ### maintenance-rules
 
@@ -368,11 +363,9 @@ fields actually set on the update schema), and delete — so the base
 classes are proven correct before any domain model/service depends on
 them.
 
-## Open decisions / assumptions
+## Decisions
 
-These were invented because no contract existed yet — please confirm or
-correct each one before `PLAN.md` is generated, since changing any of them
-later reshuffles several issues:
+These were invented because no contract existed yet, and are now approved:
 
 1. **404 vs 403 for cross-owner access** — chose 404 everywhere to avoid
    leaking existence. Confirm this is the desired behavior.
