@@ -1,0 +1,10 @@
+# Automatically loaded by `docker compose up` alongside
+# docker-compose.yml, for local development only.
+# Enables auto-reload and a bind mount of the source code.
+services:
+  api:
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./app:/app/app
+    environment:
+      DEBUG: "true"
