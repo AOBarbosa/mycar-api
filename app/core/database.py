@@ -15,9 +15,20 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 class Base(DeclarativeBase):
-    """Base declarativa para todos os models do SQLAlchemy."""
+    """Declarative base for every SQLAlchemy model."""
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Commits on a clean request, rolls back if anything raised.
+
+    Repositories only `flush()` (never `commit()`), so without this the
+    session would just discard every write when it closes at the end of
+    the request.
+    """
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

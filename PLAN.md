@@ -166,22 +166,32 @@ specific to the entity.
 
 **Description**
 - `models`: `User(BaseModel, Base)` — email (unique), password_hash, name.
-- `schemas`: `UserRequest` (email, password, name), `UserResponse` (never
-  includes password_hash), `LoginRequest`, `TokenResponse`.
-- `core/security.py`: password hashing/verification (e.g. passlib/bcrypt),
-  `create_access_token`, `decode_access_token`, using the existing
+- `schemas`: `UserRequest` (email, password, name), `UserUpdateRequest`
+  (email?, name? — deliberately **no** password field, see `ARCH.md`
+  Decisions #10), `UserResponse` (never includes password_hash),
+  `LoginRequest`, `TokenResponse`.
+- `core/security.py`: password hashing/verification (bcrypt),
+  `create_access_token`, `decode_access_token` (PyJWT), using the existing
   `SECRET_KEY` / `ALGORITHM` / `ACCESS_TOKEN_EXPIRE_MINUTES` settings
   already in `core/config.py`.
 - `repositories`: `UserRepository(BaseRepository[User])` + `get_by_email`.
-- `services`: a `UserService` handling registration (hash password before
-  calling the repository — this is *not* plain `BaseService.create`, since
-  the schema field (`password`) and the persisted field (`password_hash`)
-  differ) and login (verify credentials, issue a token).
+- `services`: `UserService(BaseService[User, UserRequest,
+  UserUpdateRequest])` — overrides `create` (hash the password before
+  calling the repository; this is *not* plain `BaseService.create`, since
+  the schema field `password` and the persisted field `password_hash`
+  differ, and it must reject an already-used email), overrides `update`
+  (re-checks email uniqueness only when `email` is actually being
+  changed, excluding the caller's own row, before delegating to
+  `super().update()`), and adds a `login` method (verify credentials,
+  issue a token) that doesn't map onto any base CRUD method.
 - `api/deps.py`: `get_current_user` dependency — decodes the bearer token,
   loads the user via `UserRepository`, raises 401 if missing/invalid/
   expired/user no longer exists.
 - `api/routers/auth.py`: `POST /auth/register`, `POST /auth/login`,
-  `GET /auth/me`.
+  `GET /auth/me`, `PATCH /auth/me`. The last one always targets the
+  caller's own record (from `get_current_user`) — there is no `{id}` path
+  param, so it's structurally impossible to target another user's
+  profile.
 
 **Acceptance criteria**
 - Registering with a new email creates the user and never returns the
@@ -192,6 +202,13 @@ specific to the entity.
 - Logging in with a wrong password or unknown email fails with 401.
 - `GET /auth/me` returns the caller's own data for a valid token, and 401
   for a missing, malformed, or expired one.
+- `PATCH /auth/me` updates only the fields provided; always affects the
+  caller's own record.
+- `PATCH /auth/me` with an `email` already used by a *different* user
+  fails with 400; changing `email` to the caller's own current value is a
+  no-op, not a conflict.
+- `PATCH /auth/me` without a valid token fails with 401, same as every
+  other authenticated endpoint.
 
 **Tests**
 - Register happy path.
@@ -203,6 +220,11 @@ specific to the entity.
 - `GET /auth/me` with missing/invalid/expired token → 401.
 - `UserResponse` never serializes `password_hash` (even if accidentally passed
   in).
+- `PATCH /auth/me` updates name only, email only, and both.
+- `PATCH /auth/me` with an email already taken by another user → 400.
+- `PATCH /auth/me` re-submitting the caller's own current email → succeeds
+  (not treated as a conflict with itself).
+- `PATCH /auth/me` without a token → 401.
 
 **Dependencies:** none — first issue.
 

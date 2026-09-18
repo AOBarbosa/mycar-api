@@ -155,6 +155,7 @@ Read-only aggregate, consumed by the dashboard and (later) CarPlay.
 | `POST /auth/register` | public | `{email, password, name}` | `201 {id, email, name, created_at, updated_at}` · `400` if email already taken | |
 | `POST /auth/login` | public | `{email, password}` | `200 {access_token, token_type, expires_in}` · `401` invalid credentials | |
 | `GET /auth/me` | authenticated | — | `200 {id, email, name, created_at, updated_at}` · `401` | |
+| `PATCH /auth/me` | authenticated | partial `{email?, name?}` | `200 {id, email, name, created_at, updated_at}` · `400` if `email` already taken by another user · `401` | always updates the caller's own record — there is no `{id}` path param, so a cross-user update isn't reachable by construction. Password change is **not** included here; deferred until a dedicated flow re-verifies the current password. |
 
 ### vehicles
 
@@ -409,3 +410,11 @@ These were invented because no contract existed yet, and are now approved:
      other users' data, not the id format itself — this decision leans on
      that convention being applied consistently everywhere, not on ids
      being hard to guess.
+10. **`PATCH /auth/me` excludes password changes.** Only `email`/`name`
+    can be updated through it. Changing a password while only relying on
+    the bearer token (no re-entry of the current password) would let a
+    stolen/leaked token silently take over the account's credentials —
+    that needs its own flow (re-verify current password, likely also
+    invalidate existing tokens) which isn't specified yet. Flag this if a
+    "change password" feature is wanted before that dedicated flow is
+    designed.

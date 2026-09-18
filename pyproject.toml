@@ -13,6 +13,8 @@ dependencies = [
     "sqlalchemy[asyncio] (>=2.0.35,<3.0)",
     "asyncpg (>=0.30,<0.31)",
     "alembic (>=1.13.3,<2.0)",
+    "bcrypt (>=4.2,<5.0)",
+    "pyjwt (>=2.9,<3.0)",
 ]
 
 [tool.poetry]
@@ -24,6 +26,7 @@ pytest-asyncio = "^0.24.0"
 httpx = "^0.27.2"
 ruff = "^0.7.0"
 mypy = "^1.11.2"
+python-dotenv = "^1.0.1"
 
 [build-system]
 requires = ["poetry-core>=2.0"]
@@ -37,9 +40,17 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Generated migration files: Alembic controls their content, not us —
+# don't hold them to our hand-written style rules (env.py/script.py.mako
+# are hand-maintained and stay linted).
+extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+# B008: Depends()/Query()/Body() in argument defaults is FastAPI's own
+# required dependency-injection pattern, not the mutable-default footgun
+# this rule targets elsewhere.
+ignore = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"
