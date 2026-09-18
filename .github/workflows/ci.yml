@@ -1,0 +1,95 @@
+name: CI
+
+"on":
+  push:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          # Matches core/config.py's default POSTGRES_DB, so the app's
+          # own Settings defaults already point here with no overrides.
+          POSTGRES_DB: mycar
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Everything else (POSTGRES_USER/HOST/PORT/DB) already matches
+      # core/config.py's defaults. SECRET_KEY's default ("change-me") is
+      # only 9 bytes and triggers PyJWT's InsecureKeyLengthWarning on
+      # every token operation — override it with something long enough.
+      SECRET_KEY: ci-only-signing-key-never-used-outside-this-pipeline-run
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/mycar_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Configure Poetry to create the venv in-project
+        run: poetry config virtualenvs.in-project true
+
+      - name: Cache Poetry virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py3.12-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-py3.12-
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Lint (ruff)
+        run: poetry run ruff check .
+
+      - name: Type-check (mypy)
+        run: poetry run mypy app tests
+
+      - name: Create test database
+        run: |
+          poetry run python -c "
+          import asyncio
+          from sqlalchemy import text
+          from sqlalchemy.ext.asyncio import create_async_engine
+
+          async def main() -> None:
+              engine = create_async_engine(
+                  'postgresql+asyncpg://postgres:postgres@localhost:5432/mycar',
+                  isolation_level='AUTOCOMMIT',
+              )
+              async with engine.connect() as conn:
+                  await conn.execute(text('CREATE DATABASE mycar_test'))
+              await engine.dispose()
+
+          asyncio.run(main())
+          "
+
+      - name: Apply migrations
+        run: poetry run alembic upgrade head
+
+      - name: Check for model/migration drift
+        run: poetry run alembic check
+
+      - name: Run tests
+        run: poetry run pytest
