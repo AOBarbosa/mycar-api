@@ -3,9 +3,11 @@
 API for a vehicle management app (CRUD for vehicles, fueling/maintenance
 events, maintenance rules and alerts).
 
-> **Current status**: project boilerplate only. No business rule has
-> been implemented yet — just structure, configuration, and a health
-> check endpoint.
+> **Current status**: authentication (register/login/profile) is
+> implemented and tested. The rest of the domain (vehicles, events,
+> maintenance rules, alerts, summary) is tracked as GitHub issues — see
+> `PLAN.md` for the full implementation plan and `ARCH.md` for the data
+> model/API contract.
 
 ## Stack
 
@@ -98,10 +100,20 @@ poetry run pytest
 business rule) must ship with the corresponding tests in the same
 delivery.
 
-## Next logical steps (out of scope for this step)
+## Development workflow
 
-- First domain model (e.g. `Vehicle`) + Alembic migration.
-- Repository, service and router for vehicles (CRUD), with tests in
-  each layer.
-- Authentication/JWT in `app/core/security.py`.
-- Modeling of events (fueling, maintenance) and alert rules.
+- Every unit of work is tracked as a GitHub issue (`gh issue list` —
+  see `PLAN.md` for the full implementation plan). Create a new branch
+  per issue (e.g. `issue-2-vehicles-crud`); don't commit directly to
+  `main`.
+- Open a pull request into `main` once the issue is done. `main` is
+  protected: a PR can only be merged once CI
+  (`.github/workflows/ci.yml` — lint, type-check, migration drift check,
+  tests) passes on it. This applies to everyone, including repo admins.
+- CI runs automatically on every push and on every pull request into
+  `main`.
+
+## Next steps
+
+Tracked as GitHub issues — see `PLAN.md` for the full implementation
+plan, business context, and endpoint-by-endpoint spec.
