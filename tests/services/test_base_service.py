@@ -1,5 +1,3 @@
-import uuid
-
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,7 +39,7 @@ async def test_get_by_id_returns_existing_object(service: DummyService) -> None:
 
 
 async def test_get_by_id_returns_none_when_missing(service: DummyService) -> None:
-    assert await service.get_by_id(uuid.uuid4()) is None
+    assert await service.get_by_id(999_999) is None
 
 
 async def test_list_returns_created_objects(service: DummyService) -> None:

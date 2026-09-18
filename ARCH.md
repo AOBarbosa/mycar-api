@@ -10,7 +10,7 @@
 
 | Field | Type | Notes |
 |---|---|---|
-| id | UUID | |
+| id | int (serial) | auto-incrementing |
 | email | string | unique, used for login |
 | password_hash | string | never returned in responses |
 | name | string | |
@@ -23,8 +23,8 @@ Owned by exactly one `User`.
 
 | Field | Type | Notes |
 |---|---|---|
-| id | UUID | |
-| owner_id | UUID | FK → User |
+| id | int (serial) | |
+| owner_id | int | FK → User |
 | brand | string | e.g. "Toyota" |
 | model | string | e.g. "Corolla" |
 | year | int | |
@@ -44,8 +44,8 @@ so the timeline can be listed/sorted as one collection.
 
 | Field | Type | Notes |
 |---|---|---|
-| id | UUID | |
-| vehicle_id | UUID | FK → Vehicle |
+| id | int (serial) | |
+| vehicle_id | int | FK → Vehicle |
 | type | enum: `fueling`, `maintenance` | discriminator |
 | source | enum: `manual`, `voice` | how the event was created |
 | event_date | date | |
@@ -74,7 +74,7 @@ so the timeline can be listed/sorted as one collection.
 | maintenance_type | enum: `oil_change`, `tire_rotation`, `brake_pads`, `battery`, `air_filter`, `other` | |
 | cost | float \| null | |
 | workshop | string \| null | |
-| resolved_alert_id | UUID \| null | set if this event auto-resolved an open Alert |
+| resolved_alert_id | int \| null | set if this event auto-resolved an open Alert |
 
 ### MaintenanceRule
 
@@ -83,8 +83,8 @@ every 10,000 km or 12 months").
 
 | Field | Type | Notes |
 |---|---|---|
-| id | UUID | |
-| vehicle_id | UUID | FK → Vehicle |
+| id | int (serial) | |
+| vehicle_id | int | FK → Vehicle |
 | maintenance_type | enum (same list as Event.details.maintenance_type) | |
 | interval_km | int \| null | at least one of interval_km / interval_months required |
 | interval_months | int \| null | |
@@ -102,15 +102,15 @@ auto-resolved when a matching maintenance `Event` is registered.
 
 | Field | Type | Notes |
 |---|---|---|
-| id | UUID | |
-| vehicle_id | UUID | FK → Vehicle |
-| maintenance_rule_id | UUID | FK → MaintenanceRule |
+| id | int (serial) | |
+| vehicle_id | int | FK → Vehicle |
+| maintenance_rule_id | int | FK → MaintenanceRule |
 | severity | enum: `info` (approaching), `warning` (due), `critical` (overdue) | |
 | status | enum: `open`, `resolved`, `dismissed` | |
 | message | string | human-readable, generated |
 | due_mileage | int \| null | |
 | due_date | date \| null | |
-| resolved_by_event_id | UUID \| null | set when auto-resolved by an Event |
+| resolved_by_event_id | int \| null | set when auto-resolved by an Event |
 | created_at | datetime | |
 | resolved_at | datetime \| null | |
 
@@ -142,7 +142,8 @@ Read-only aggregate, consumed by the dashboard and (later) CarPlay.
 - **Errors**: `{ "detail": string }` for simple errors; `422` for request
   validation errors uses FastAPI's default
   `{ "detail": [{ "loc", "msg", "type" }] }` shape.
-- **IDs**: UUIDs everywhere, returned as strings.
+- **IDs**: serial (auto-incrementing) integers everywhere, returned as
+  JSON numbers, not strings.
 - **Dates/times**: ISO 8601, UTC for datetimes.
 
 ## 3. Endpoints
@@ -151,9 +152,9 @@ Read-only aggregate, consumed by the dashboard and (later) CarPlay.
 
 | Method & path | Auth | Request | Response | Notes |
 |---|---|---|---|---|
-| `POST /auth/register` | public | `{email, password, name}` | `201 {id, email, name, created_at}` · `400` if email already taken | |
+| `POST /auth/register` | public | `{email, password, name}` | `201 {id, email, name, created_at, updated_at}` · `400` if email already taken | |
 | `POST /auth/login` | public | `{email, password}` | `200 {access_token, token_type, expires_in}` · `401` invalid credentials | |
-| `GET /auth/me` | authenticated | — | `200 {id, email, name, created_at}` · `401` | |
+| `GET /auth/me` | authenticated | — | `200 {id, email, name, created_at, updated_at}` · `401` | |
 
 ### vehicles
 
@@ -219,7 +220,7 @@ it doesn't depend on the entities above being confirmed):
 class BaseModel:
     """Plain mixin, not a DeclarativeBase — see docstring for why."""
 
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -233,7 +234,7 @@ first (SQLAlchemy's recommended order for declarative mixins):
 class Vehicle(BaseModel, Base):
     __tablename__ = "vehicles"
 
-    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     brand: Mapped[str]
     # ... id, created_at, updated_at come from BaseModel
 ```
@@ -268,7 +269,7 @@ class BaseRepository(Generic[ModelType]):
 
     def __init__(self, session: AsyncSession) -> None: ...
     async def create(self, **values: object) -> ModelType: ...
-    async def get_by_id(self, id: UUID) -> ModelType | None: ...
+    async def get_by_id(self, id: int) -> ModelType | None: ...
     async def list(self, *, offset: int = 0, limit: int = 20) -> list[ModelType]: ...
     async def update(self, obj: ModelType, **values: object) -> ModelType: ...
     async def delete(self, obj: ModelType) -> None: ...
@@ -281,7 +282,7 @@ attribute, and only adds entity-specific queries:
 class VehicleRepository(BaseRepository[Vehicle]):
     model = Vehicle
 
-    async def list_by_owner(self, owner_id: UUID) -> list[Vehicle]:
+    async def list_by_owner(self, owner_id: int) -> list[Vehicle]:
         stmt = select(self.model).where(self.model.owner_id == owner_id)
         return list((await self.session.execute(stmt)).scalars().all())
 ```
@@ -292,7 +293,7 @@ class VehicleRepository(BaseRepository[Vehicle]):
 class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def __init__(self, repository: BaseRepository[ModelType]) -> None: ...
     async def create(self, data: CreateSchemaType) -> ModelType: ...
-    async def get_by_id(self, id: UUID) -> ModelType | None: ...
+    async def get_by_id(self, id: int) -> ModelType | None: ...
     async def list(self, *, offset: int = 0, limit: int = 20) -> list[ModelType]: ...
     async def update(self, obj: ModelType, data: UpdateSchemaType) -> ModelType: ...
     async def delete(self, obj: ModelType) -> None: ...
@@ -304,12 +305,12 @@ only overrides a method when it needs business logic beyond plain CRUD
 reimplementing it:
 
 ```python
-class EventService(BaseService[Event, EventCreate, EventUpdate]):
+class EventService(BaseService[Event, EventCreateRequest, EventUpdateRequest]):
     def __init__(self, repository: EventRepository, alert_repository: AlertRepository) -> None:
         super().__init__(repository)
         self.alert_repository = alert_repository
 
-    async def create(self, data: EventCreate) -> Event:
+    async def create(self, data: EventCreateRequest) -> Event:
         event = await super().create(data)
         if event.type == "maintenance":
             await self._resolve_matching_alert(event)
@@ -394,3 +395,17 @@ These were invented because no contract existed yet, and are now approved:
    not specified here (e.g. "warning at due date/mileage, critical N days/
    km past due"). Should this be configurable per rule, or a fixed global
    rule?
+9. **All entity ids are serial (auto-incrementing) ints, not UUIDs** —
+   requested explicitly, superseding the original "UUIDs everywhere"
+   convention (§2 now reflects this). Applies uniformly: `User`,
+   `Vehicle`, `Event`, `MaintenanceRule`, `Alert` all get their `id` from
+   the same `BaseModel` mixin (`app/models/base.py`), no per-entity
+   exceptions. `BaseRepository.get_by_id` / `BaseService.get_by_id` are
+   typed `id: int` accordingly.
+   - Consequence worth keeping in mind: sequential ids are enumerable
+     (vehicle `/1`, `/2`, `/3`, ...) across every resource in the API, not
+     just `User`. The ownership convention (§2 — cross-owner access
+     returns 404) is what actually prevents enumeration from leaking
+     other users' data, not the id format itself — this decision leans on
+     that convention being applied consistently everywhere, not on ids
+     being hard to guess.

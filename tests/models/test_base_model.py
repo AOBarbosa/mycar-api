@@ -1,5 +1,3 @@
-import uuid
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.support import DummyItem
@@ -10,7 +8,7 @@ async def test_id_is_generated_automatically(dummy_session: AsyncSession) -> Non
     dummy_session.add(item)
     await dummy_session.flush()
 
-    assert isinstance(item.id, uuid.UUID)
+    assert isinstance(item.id, int)
 
 
 async def test_created_at_and_updated_at_are_set_on_insert(dummy_session: AsyncSession) -> None:

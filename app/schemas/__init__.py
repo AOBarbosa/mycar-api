@@ -1,1 +1,1 @@
-"""Modelos Pydantic de request/response, separados dos models do banco."""
+"""Pydantic request/response models, separate from the database models."""

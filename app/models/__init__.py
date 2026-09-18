@@ -8,5 +8,6 @@ every domain model should combine with `Base`.
 
 from app.core.database import Base
 from app.models.base import BaseModel
+from app.models.user import User
 
-__all__ = ["Base", "BaseModel"]
+__all__ = ["Base", "BaseModel", "User"]

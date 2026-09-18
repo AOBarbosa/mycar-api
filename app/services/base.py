@@ -1,5 +1,4 @@
 from typing import Generic, TypeVar
-from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy.orm import DeclarativeBase
@@ -25,7 +24,7 @@ class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     async def create(self, data: CreateSchemaType) -> ModelType:
         return await self.repository.create(**data.model_dump())
 
-    async def get_by_id(self, id: UUID) -> ModelType | None:
+    async def get_by_id(self, id: int) -> ModelType | None:
         return await self.repository.get_by_id(id)
 
     async def list(self, *, offset: int = 0, limit: int = 20) -> list[ModelType]:

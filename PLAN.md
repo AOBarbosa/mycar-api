@@ -166,7 +166,7 @@ specific to the entity.
 
 **Description**
 - `models`: `User(BaseModel, Base)` — email (unique), password_hash, name.
-- `schemas`: `UserCreate` (email, password, name), `UserRead` (never
+- `schemas`: `UserRequest` (email, password, name), `UserResponse` (never
   includes password_hash), `LoginRequest`, `TokenResponse`.
 - `core/security.py`: password hashing/verification (e.g. passlib/bcrypt),
   `create_access_token`, `decode_access_token`, using the existing
@@ -201,7 +201,7 @@ specific to the entity.
 - Login with unknown email → 401.
 - `GET /auth/me` with valid token → correct user.
 - `GET /auth/me` with missing/invalid/expired token → 401.
-- `UserRead` never serializes `password_hash` (even if accidentally passed
+- `UserResponse` never serializes `password_hash` (even if accidentally passed
   in).
 
 **Dependencies:** none — first issue.
@@ -222,11 +222,11 @@ specific to the entity.
   vehicle-scoping.
 - `models`: `Vehicle(BaseModel, Base)` — owner_id (FK → User), brand,
   model, year, license_plate, color, fuel_type, current_mileage.
-- `schemas`: `VehicleCreate`, `VehicleUpdate`, `VehicleRead`.
+- `schemas`: `VehicleCreateRequest`, `VehicleUpdateRequest`, `VehicleResponse`.
 - `repositories`: `VehicleRepository(BaseRepository[Vehicle])` +
   `list_by_owner(owner_id)`.
-- `services`: `VehicleService(BaseService[Vehicle, VehicleCreate,
-  VehicleUpdate])` — overrides `create` to set `owner_id` from the caller
+- `services`: `VehicleService(BaseService[Vehicle, VehicleCreateRequest,
+  VehicleUpdateRequest])` — overrides `create` to set `owner_id` from the caller
   and to check `license_plate` uniqueness *per owner*.
 - `api/routers/vehicles.py`: full CRUD, all under `get_current_user`.
 
@@ -261,13 +261,13 @@ specific to the entity.
 - `models`: `MaintenanceRule(BaseModel, Base)` — vehicle_id (FK → Vehicle,
   `ondelete="CASCADE"`), maintenance_type, interval_km, interval_months,
   last_done_mileage, last_done_date, active.
-- `schemas`: `MaintenanceRuleCreate` with a `model_validator` enforcing at
-  least one of `interval_km` / `interval_months`; `MaintenanceRuleUpdate`;
-  `MaintenanceRuleRead`.
+- `schemas`: `MaintenanceRuleCreateRequest` with a `model_validator` enforcing at
+  least one of `interval_km` / `interval_months`; `MaintenanceRuleUpdateRequest`;
+  `MaintenanceRuleResponse`.
 - `repositories`: `MaintenanceRuleRepository(BaseRepository[
   MaintenanceRule])` + `list_by_vehicle(vehicle_id, active=None)`.
 - `services`: `MaintenanceRuleService(BaseService[MaintenanceRule,
-  MaintenanceRuleCreate, MaintenanceRuleUpdate])` — no overrides needed
+  MaintenanceRuleCreateRequest, MaintenanceRuleUpdateRequest])` — no overrides needed
   beyond what the schema validator already covers.
 - `api/routers/maintenance_rules.py`: nested under
   `/vehicles/{vehicle_id}/maintenance-rules` for create/list, top-level
@@ -304,16 +304,16 @@ specific to the entity.
   `ondelete="CASCADE"`), type, source, event_date, mileage, notes, and a
   `details` **JSONB** column (its shape is polymorphic by `type`, per
   `ARCH.md`; this is a single-table design, not two separate tables).
-- `schemas`: model `EventCreate` as a Pydantic **discriminated union** on
-  `type` — `FuelingEventCreate | MaintenanceEventCreate` via
+- `schemas`: model `EventCreateRequest` as a Pydantic **discriminated union** on
+  `type` — `FuelingEventCreateRequest | MaintenanceEventCreateRequest` via
   `Field(discriminator="type")` — each with its own typed `details`
-  sub-model (`FuelingDetails`, `MaintenanceDetails`). `EventRead` mirrors
+  sub-model (`FuelingDetails`, `MaintenanceDetails`). `EventResponse` mirrors
   this for output (and is where `MaintenanceDetails.resolved_alert_id`
-  shows up once Issue 7 exists). `EventUpdate` stays a plain partial model
+  shows up once Issue 7 exists). `EventUpdateRequest` stays a plain partial model
   (no type-switching on update).
 - `repositories`: `EventRepository(BaseRepository[Event])` +
   `list_by_vehicle(vehicle_id, type=None, date_from=None, date_to=None)`.
-- `services`: `EventService(BaseService[Event, EventCreate, EventUpdate])`
+- `services`: `EventService(BaseService[Event, EventCreateRequest, EventUpdateRequest])`
   **overrides `create`**, for two reasons: (1) the discriminated union's
   nested `details` sub-model needs to be dumped into a plain dict before
   it can go into the JSONB column — the base class's naive
@@ -360,8 +360,8 @@ specific to the entity.
   `ondelete="CASCADE"`), maintenance_rule_id (FK → MaintenanceRule,
   `ondelete="CASCADE"`), severity, status, message, due_mileage, due_date,
   resolved_by_event_id (nullable FK → Event).
-- `schemas`: `AlertRead` only — there is deliberately no `AlertCreate` /
-  `AlertUpdate` exposed to any router (see `ARCH.md`: no direct create
+- `schemas`: `AlertResponse` only — there is deliberately no `AlertCreateRequest` /
+  `AlertUpdateRequest` exposed to any router (see `ARCH.md`: no direct create
   endpoint).
 - `repositories`: `AlertRepository(BaseRepository[Alert])` +
   `list_by_owner(owner_id, status=None)` (joins through Vehicle) and
@@ -409,7 +409,7 @@ target for `resolved_by_event_id`).
 **Description**
 - New module, e.g. `services/voice_parser.py` — a **regex/rule-based**
   parser (explicitly **not** an LLM call) that takes `raw_text` and
-  attempts to extract a `FuelingEventCreate` or `MaintenanceEventCreate`.
+  attempts to extract a `FuelingEventCreateRequest` or `MaintenanceEventCreateRequest`.
   Cover a deliberately small, fixed set of phrasing patterns (e.g. "abasteci
   N litros a R$X o litro[, Y km]", "troquei o óleo[ em Y km]") — this is a
   first version meant to handle the common, predictable cases only. Do
@@ -542,9 +542,9 @@ with 6 and merged after both land, but tested together).
   last fueling Event, last maintenance Event, open Alerts, average
   consumption (km/liter, from fueling history), and total spend (fueling +
   maintenance costs) for the last 30 days and last 12 months.
-- `schemas`: `SummaryRead`.
+- `schemas`: `SummaryResponse`.
 - `api/routers/summary.py`: `GET /vehicles/{vehicle_id}/summary`, `GET
-  /summary` (one `SummaryRead` per vehicle owned by the caller).
+  /summary` (one `SummaryResponse` per vehicle owned by the caller).
 
 **Acceptance criteria**
 - `avg_consumption_km_per_liter` is computed correctly from at least two

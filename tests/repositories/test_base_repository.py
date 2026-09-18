@@ -1,5 +1,3 @@
-import uuid
-
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,7 +32,7 @@ async def test_get_by_id_returns_existing_object(repo: DummyRepository) -> None:
 
 
 async def test_get_by_id_returns_none_when_missing(repo: DummyRepository) -> None:
-    found = await repo.get_by_id(uuid.uuid4())
+    found = await repo.get_by_id(999_999)
 
     assert found is None
 
